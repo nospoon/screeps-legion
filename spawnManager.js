@@ -49,13 +49,25 @@ module.exports.run = function(spawn) {
     const { body: baseBody, min } = config.roles[role];
     const count = counts[role] || 0;
     if (count < min) {
-      // calculate cost of base body
-      const baseCost = baseBody.reduce((sum, part) => sum + BODYPART_COST[part], 0);
-      const maxRepeats = Math.floor(Math.min(energyAvailable / baseCost, 50 / baseBody.length));
-      if (maxRepeats < 1) return;
-      const repeats = maxRepeats;
-      let body = [];
-      for (let i = 0; i < repeats; i++) body.push(...baseBody);
+      // dynamic body: greedy composition based on baseBody ratio
+      const baseCost = baseBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
+      // skip if not enough energy for one base
+      if (energyAvailable < baseCost) continue;
+      let remaining = energyAvailable;
+      const body = [];
+      // add parts in baseBody order greedily until no energy or cap reached
+      while (true) {
+        let added = false;
+        for (const part of baseBody) {
+          const cost = BODYPART_COST[part];
+          if (cost <= remaining && body.length < 50) {
+            body.push(part);
+            remaining -= cost;
+            added = true;
+          }
+        }
+        if (!added) break;
+      }
       const name = `${role}_${Game.time}`;
       spawn.spawnCreep(body, name, { memory: { role, home: room.name } });
       return;
