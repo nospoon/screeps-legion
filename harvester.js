@@ -49,37 +49,44 @@ module.exports.run = function(creep) {
   }
 
   if (creep.memory.harvesting) {
-    // harvesting-phase: lock or pick source
+    // harvesting-phase: dynamic slot-based assignment with nearest-source fallback
     const sources = creep.room.find(FIND_SOURCES_ACTIVE);
     if (sources.length === 0) {
       creep.memory.harvesting = false;
       return;
     }
-    // build workCounts per source
-    const harvesters = creep.room.find(FIND_MY_CREEPS, { filter: c =>
-      c.memory.role === 'harvester' &&
-      c.memory.home === creep.memory.home &&
-      c.store.getUsedCapacity(RESOURCE_ENERGY) === 0
+    const harvesters = creep.room.find(FIND_MY_CREEPS, {
+      filter: c => c.memory.role === 'harvester' && c.memory.home === creep.memory.home && c.memory.harvesting
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    const terrain = Game.map.getRoomTerrain(creep.room.name);
+    const slotSources = [];
+    sources.forEach(src => {
+      let free = 0;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const x = src.pos.x + dx, y = src.pos.y + dy;
+          if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+          if (creep.room.lookForAt(LOOK_STRUCTURES, x, y).some(o => o.structureType !== STRUCTURE_ROAD)) continue;
+          if (creep.room.lookForAt(LOOK_CREEPS, x, y).length) continue;
+          free++;
+        }
+      }
+      const allowed = Math.max(0, free - 1);
+      for (let i = 0; i < allowed; i++) slotSources.push(src.id);
     });
-    const workCounts = {};
-    for (const s of sources) workCounts[s.id] = 0;
-    for (const h of harvesters) {
-      const sid = h.memory.sourceId;
-      if (workCounts[sid] !== undefined) workCounts[sid] += h.getActiveBodyparts(WORK);
+    let sid;
+    if (slotSources.length > 0) {
+      const idx = harvesters.findIndex(h => h.name === creep.name);
+      sid = slotSources[idx % slotSources.length];
+    } else {
+      const fallback = creep.pos.findClosestByRange(sources);
+      sid = fallback ? fallback.id : sources[0].id;
     }
-    // regen rate per tick
-    const regenRate = (sources[0].energyCapacity || 300) / 300;
-    // try existing sourceId
-    let target = creep.memory.sourceId && Game.getObjectById(creep.memory.sourceId);
-    if (!target || target.energy === 0 || workCounts[target.id] * HARVEST_POWER > regenRate) {
-      // pick sustainable or nearest
-      sources.sort((a, b) => creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b));
-      target = sources.find(s => workCounts[s.id] * HARVEST_POWER <= regenRate) || sources[0];
-      creep.memory.sourceId = target.id;
-    }
-    // harvest or move
-    if (creep.harvest(target) === ERR_NOT_IN_RANGE) {
-      creep.smartMove(target);
+    const source = Game.getObjectById(sid);
+    creep.memory.sourceId = sid;
+    if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+      creep.smartMove(source);
     }
   } else {
     // deposit strategy: containers if haulers exist, else spawn

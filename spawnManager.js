@@ -51,15 +51,32 @@ module.exports.run = function(spawn) {
     if (role === 'builder') {
       if (spawn.room.find(FIND_CONSTRUCTION_SITES).length === 0) continue;
     }
-    // calculate desired count: min or maxPerSource*sourceCount for harvester
-    const { body: baseBody, min, maxPerSource } = config.roles[role];
+    // calculate desired count: base min or dynamic based on source slots for harvester
+    const { body: baseBody, min } = config.roles[role];
     const count = counts[role] || 0;
     // desired count: base min or maxPerSource*sourceCount for harvesters
     let desired = min;
-    if (role === 'harvester' && maxPerSource) {
-      // use total sources to determine spawns, not just active ones
-      const sourceCount = room.find(FIND_SOURCES).length;
-      desired = maxPerSource * sourceCount;
+    if (role === 'harvester') {
+      // dynamic harvester count based on free slots minus one reserved per source
+      const sources = room.find(FIND_SOURCES_ACTIVE);
+      const terrain = Game.map.getRoomTerrain(room.name);
+      let totalSlots = 0;
+      for (const s of sources) {
+        let slots = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const x = s.pos.x + dx;
+            const y = s.pos.y + dy;
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+            const structs = room.lookForAt(LOOK_STRUCTURES, x, y);
+            if (structs.some(st => st.structureType !== STRUCTURE_ROAD)) continue;
+            slots++;
+          }
+        }
+        totalSlots += Math.max(0, slots - 1);
+      }
+      desired = Math.max(min, totalSlots);
     }
     if (count < desired) {
       const baseCost = baseBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
