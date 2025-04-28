@@ -6,6 +6,8 @@ const intel = require('./intel');
 const { clearDeadMemory } = require('./memory');
 const spawnManager = require('./spawnManager');
 const roomManager = require('./roomManager');
+const layoutPlanner = require('./layoutPlanner');
+const towerManager = require('./towerManager');
 const roles = {
   harvester: require('./harvester'),
   hauler: require('./hauler'),
@@ -19,8 +21,6 @@ const roles = {
 module.exports.loop = function () {
   // run tower and layout planners
   if (Game.cpu.bucket > config.cpuThrottle) {
-    const layoutPlanner = require('./layoutPlanner');
-    const towerManager = require('./towerManager');
     for (const roomName in Game.rooms) {
       const room = Game.rooms[roomName];
       try { layoutPlanner.plan(room); } catch(e) { console.log('layoutPlanner error:', e); }
@@ -30,14 +30,13 @@ module.exports.loop = function () {
   // Refresh global intel before operations
   intel.refresh();
   clearDeadMemory();
-  // High-level managers only when bucket is healthyNow it's ||
+  // Manage spawns (critical)
+  for (const spawnName in Game.spawns) {
+    try { spawnManager.run(Game.spawns[spawnName]); }
+    catch (e) { console.log(`spawnManager error (${spawnName}): ${e}`); }
+  }
+  // Manage rooms (non-critical)
   if (Game.cpu.bucket > config.cpuThrottle) {
-    // Manage spawns
-    for (const spawnName in Game.spawns) {
-      try { spawnManager.run(Game.spawns[spawnName]); }
-      catch (e) { console.log(`spawnManager error (${spawnName}): ${e}`); }
-    }
-    // Manage rooms
     for (const roomName in Game.rooms) {
       try { roomManager.run(Game.rooms[roomName]); }
       catch (e) { console.log(`roomManager error (${roomName}): ${e}`); }
@@ -56,11 +55,11 @@ module.exports.loop = function () {
   if (Game.time % 100 === 0) {
     for (const c of Object.values(Game.creeps)) delete c.memory.idleMoved;
   }
-  // move idle creeps off roads to avoid blocking
+  // move idle creeps off roads to avoid blocking (skip harvesters)
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
-    // skip if repositioned recently, fatigued, or carrying energy (busy)
-    if (creep.memory.idleMoved || creep.fatigue > 0 || creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) continue;
+    // skip harvesters, repositioned recently, fatigued, or carrying energy
+    if (creep.memory.role === 'harvester' || creep.memory.idleMoved || creep.fatigue > 0 || creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) continue;
     const here = creep.pos.lookFor(LOOK_STRUCTURES);
     if (here.some(s => s.structureType === STRUCTURE_ROAD)) {
       // find adjacent non-road, non-wall

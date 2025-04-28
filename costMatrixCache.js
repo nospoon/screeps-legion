@@ -2,9 +2,17 @@
 // Cache PathFinder CostMatrix per room to speed up pathfinding
 module.exports.getMatrix = function(room) {
   if (!Memory.costMatrices) Memory.costMatrices = {};
+  // purge stale entries every 500 ticks
+  if (Game.time % 500 === 0) {
+    for (const rn in Memory.costMatrices) {
+      const e = Memory.costMatrices[rn];
+      if (Game.time - e.timestamp > 1000) delete Memory.costMatrices[rn];
+    }
+  }
   const entry = Memory.costMatrices[room.name];
-  // reuse for 10 ticks
-  if (entry && Game.time - entry.timestamp < 10) {
+  // dynamic TTL: 10 ticks when visible, else infinite
+  const ttl = Game.rooms[room.name] ? 10 : Infinity;
+  if (entry && Game.time - entry.timestamp < ttl) {
     return PathFinder.CostMatrix.deserialize(entry.matrix);
   }
   const cm = new PathFinder.CostMatrix();

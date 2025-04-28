@@ -10,12 +10,16 @@ module.exports.run = function(spawn) {
   const counts = (Memory.intel.rooms[room.name] || {}).creepCount || {};
   const energyAvailable = room.energyAvailable;
 
-  // dynamic turretRefiller spawn when towers exist
+  // dynamic turretRefiller spawn when towers fall below energy threshold
   const towers = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER });
+  const towersNeeding = towers.filter(t =>
+    t.store.getUsedCapacity(RESOURCE_ENERGY) / t.store.getCapacity(RESOURCE_ENERGY)
+      < config.turretRefillThreshold
+  );
   const currentRef = counts['turretRefiller'] || 0;
   const refBody = config.roles.turretRefiller.body;
   const refCost = refBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
-  if (towers.length > currentRef && energyAvailable >= refCost) {
+  if (towersNeeding.length > currentRef && energyAvailable >= refCost) {
     const name = `turretRefiller_${Game.time}`;
     spawn.spawnCreep(refBody, name, { memory: { role: 'turretRefiller', home: room.name } });
     return;
@@ -46,16 +50,28 @@ module.exports.run = function(spawn) {
     if (role === 'builder') {
       if (spawn.room.find(FIND_CONSTRUCTION_SITES).length === 0) continue;
     }
-    const { body: baseBody, min } = config.roles[role];
+    // calculate desired count: min or maxPerSource*sourceCount for harvester
+    const { body: baseBody, min, maxPerSource } = config.roles[role];
     const count = counts[role] || 0;
-    if (count < min) {
-      // dynamic body: greedy composition based on baseBody ratio
+    // desired count: base min or maxPerSource*sourceCount for harvesters
+    let desired = min;
+    if (role === 'harvester' && maxPerSource) {
+      // use total sources to determine spawns, not just active ones
+      const sourceCount = room.find(FIND_SOURCES).length;
+      desired = maxPerSource * sourceCount;
+    }
+    if (count < desired) {
       const baseCost = baseBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
-      // skip if not enough energy for one base
       if (energyAvailable < baseCost) continue;
+      const name = `${role}_${Game.time}`;
+      if (role === 'harvester') {
+        // spawn minimal harvester quickly to fill sources
+        spawn.spawnCreep(baseBody, name, { memory: { role, home: room.name } });
+        return;
+      }
+      // dynamic greedy body for other roles
       let remaining = energyAvailable;
       const body = [];
-      // add parts in baseBody order greedily until no energy or cap reached
       while (true) {
         let added = false;
         for (const part of baseBody) {
@@ -68,7 +84,6 @@ module.exports.run = function(spawn) {
         }
         if (!added) break;
       }
-      const name = `${role}_${Game.time}`;
       spawn.spawnCreep(body, name, { memory: { role, home: room.name } });
       return;
     }

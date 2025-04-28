@@ -4,7 +4,7 @@
  */
 module.exports = {
   roles: {
-    harvester: { body: [WORK, CARRY, MOVE], min: 2 },
+    harvester: { body: [WORK, CARRY, MOVE], min: 2, maxPerSource: 2 },
     hauler:    { body: [CARRY, CARRY, MOVE], min: 2 },
     builder:   { body: [WORK, CARRY, MOVE], min: 2 },
     upgrader:  { body: [WORK, CARRY, MOVE], min: 1 },
@@ -13,5 +13,9 @@ module.exports = {
     turretRefiller: { body: [CARRY, CARRY, MOVE], min: 0 },
     remoteMiner:{ body: [WORK, CARRY, MOVE], min: 0 }
   },
-  cpuThrottle: 200 // bucket threshold to skip non-critical tasks
+  cpuThrottle: 200, // bucket threshold to skip non-critical tasks
+  // when to spawn turretRefiller (fraction of tower energy remaining)
+  turretRefillThreshold: 0.5,
+  // enable auto rampart construction on key structures when under attack
+  rampartAuto: true
 };
