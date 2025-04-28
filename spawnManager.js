@@ -10,6 +10,17 @@ module.exports.run = function(spawn) {
   const counts = (Memory.intel.rooms[room.name] || {}).creepCount || {};
   const energyAvailable = room.energyAvailable;
 
+  // dynamic turretRefiller spawn when towers exist
+  const towers = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER });
+  const currentRef = counts['turretRefiller'] || 0;
+  const refBody = config.roles.turretRefiller.body;
+  const refCost = refBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
+  if (towers.length > currentRef && energyAvailable >= refCost) {
+    const name = `turretRefiller_${Game.time}`;
+    spawn.spawnCreep(refBody, name, { memory: { role: 'turretRefiller', home: room.name } });
+    return;
+  }
+
   for (const role in config.roles) {
     // dynamic defender spawn when attacked
     if (role === 'defender') {

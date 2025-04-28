@@ -10,9 +10,21 @@ const roles = {
   builder: require('./builder'),
   upgrader: require('./upgrader'),
   repairer: require('./repairer'),
+  turretRefiller: require('./turretRefiller'),
+  defender: require('./defender')
 };
 
 module.exports.loop = function () {
+  // run tower and layout planners
+  if (Game.cpu.bucket > config.cpuThrottle) {
+    const layoutPlanner = require('./layoutPlanner');
+    const towerManager = require('./towerManager');
+    for (const roomName in Game.rooms) {
+      const room = Game.rooms[roomName];
+      try { layoutPlanner.plan(room); } catch(e) { console.error('layoutPlanner:', e); }
+      try { towerManager.run(room); } catch(e) { console.error('towerManager:', e); }
+    }
+  }
   // Refresh global intel before operations
   intel.refresh();
   clearDeadMemory();

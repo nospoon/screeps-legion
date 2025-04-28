@@ -10,6 +10,7 @@ module.exports = {
     upgrader:  { body: [WORK, CARRY, MOVE], min: 1 },
     repairer:  { body: [WORK, CARRY, MOVE], min: 1 },
     defender:  { body: [TOUGH, ATTACK, MOVE], min: 0 },
+    turretRefiller: { body: [CARRY, CARRY, MOVE], min: 0 },
     remoteMiner:{ body: [WORK, CARRY, MOVE], min: 0 }
   },
   cpuThrottle: 200 // bucket threshold to skip non-critical tasks
