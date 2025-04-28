@@ -9,6 +9,7 @@ module.exports.run = function(spawn) {
   const room = spawn.room;
   const counts = (Memory.intel.rooms[room.name] || {}).creepCount || {};
   const energyAvailable = room.energyAvailable;
+  const roomEnergyCapacity = room.energyCapacityAvailable;
 
   // dynamic turretRefiller spawn when towers fall below energy threshold
   const towers = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_TOWER });
@@ -64,27 +65,34 @@ module.exports.run = function(spawn) {
       const baseCost = baseBody.reduce((sum, p) => sum + BODYPART_COST[p], 0);
       if (energyAvailable < baseCost) continue;
       const name = `${role}_${Game.time}`;
-      if (role === 'harvester') {
-        // spawn minimal harvester quickly to fill sources
-        spawn.spawnCreep(baseBody, name, { memory: { role, home: room.name } });
-        return;
-      }
-      // dynamic greedy body for other roles
-      let remaining = energyAvailable;
-      const body = [];
-      while (true) {
-        let added = false;
-        for (const part of baseBody) {
-          const cost = BODYPART_COST[part];
-          if (cost <= remaining && body.length < 50) {
-            body.push(part);
-            remaining -= cost;
-            added = true;
+      // decide body shape: base or boosted greedy
+      const fraction = energyAvailable / roomEnergyCapacity;
+      let buildBody;
+      if (fraction < config.spawnBoostThreshold) {
+        buildBody = baseBody;
+      } else {
+        // greedy fill with baseBody pattern, capping WORK parts
+        let remaining = energyAvailable;
+        const body = [];
+        const maxWork = config.maxWorkPerRole[role] || Infinity;
+        let workCount = 0;
+        while (true) {
+          let added = false;
+          for (const part of baseBody) {
+            if (part === WORK && workCount >= maxWork) continue;
+            const cost = BODYPART_COST[part];
+            if (cost <= remaining && body.length < 50) {
+              body.push(part);
+              remaining -= cost;
+              added = true;
+              if (part === WORK) workCount++;
+            }
           }
+          if (!added) break;
         }
-        if (!added) break;
+        buildBody = body;
       }
-      spawn.spawnCreep(body, name, { memory: { role, home: room.name } });
+      spawn.spawnCreep(buildBody, name, { memory: { role, home: room.name } });
       return;
     }
   }

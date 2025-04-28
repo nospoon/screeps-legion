@@ -17,5 +17,13 @@ module.exports = {
   // when to spawn turretRefiller (fraction of tower energy remaining)
   turretRefillThreshold: 0.5,
   // enable auto rampart construction on key structures when under attack
-  rampartAuto: true
+  rampartAuto: true,
+  // when to boost spawns to build full-size bodies
+  spawnBoostThreshold: 0.8,
+  // caps for WORK parts on roles to avoid overspending
+  maxWorkPerRole: {
+    builder: 5,
+    upgrader: 5,
+    repairer: 5
+  }
 };
